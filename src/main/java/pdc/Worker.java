@@ -99,12 +99,13 @@ public class Worker {
                 executorService.submit(() -> processTask(msg));
                 break;
             case Message.TYPE_HEARTBEAT:
-                try {
-                    Message ackMsg = new Message(Message.TYPE_HEARTBEAT_ACK, workerId, null);
-                    synchronized (outputStream) {
-                        ackMsg.writeTo(outputStream);
-                    }
-                } catch (IOException e) {
+    try {
+        Message ackMsg = new Message(Message.TYPE_HEARTBEAT_ACK, workerId, null);
+        ackMsg.studentId = workerId;  // ADD THIS LINE
+        synchronized (outputStream) {
+            ackMsg.writeTo(outputStream);
+        }
+    } catch (IOException e) {
                     System.err.println("[Worker " + workerId + "] Failed to send heartbeat ack: " + e.getMessage());
                 }
                 break;
@@ -238,11 +239,26 @@ public class Worker {
     }
 
     public static void main(String[] args) {
-        String workerId = System.getenv().getOrDefault("WORKER_ID", "worker-" + System.currentTimeMillis());
-        String masterHost = System.getenv().getOrDefault("MASTER_HOST", "localhost");
-        int masterPort = Integer.parseInt(System.getenv().getOrDefault("MASTER_PORT", "9999"));
-        Worker worker = new Worker(workerId);
-        worker.joinCluster(masterHost, masterPort);
-        worker.execute();
+    String workerId = System.getenv("WORKER_ID");
+    if (workerId == null) {
+        workerId = "worker-" + System.currentTimeMillis();
     }
+    
+    String masterHost = System.getenv("MASTER_HOST");
+    if (masterHost == null) {
+        masterHost = "localhost";
+    }
+    
+    String masterPort = System.getenv("MASTER_PORT");
+    String portBase = System.getenv("CSM218_PORT_BASE");
+    
+    int port;
+    if (masterPort != null) {
+        port = Integer.parseInt(masterPort);
+    } else if (portBase != null) {
+        port = Integer.parseInt(portBase);
+    } else {
+        port = 9999;
+    }
+}
 }

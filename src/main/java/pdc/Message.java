@@ -25,10 +25,17 @@ public class Message {
     public static final String TYPE_SHUTDOWN = "SHUTDOWN";
 
     public Message() {
-        this.magic = "CSM218";
-        this.version = 1;
-        this.timestamp = System.currentTimeMillis();
-        this.studentId = System.getenv().getOrDefault("STUDENT_ID", "default-student");
+    this.magic = "CSM218";
+    this.version = 1;
+    this.timestamp = System.currentTimeMillis();
+    
+    // CRITICAL: Read from environment
+    String envStudentId = System.getenv("STUDENT_ID");
+    if (envStudentId != null && !envStudentId.isEmpty()) {
+        this.studentId = envStudentId;
+    } else {
+        this.studentId = "default-student";
+    }
     }
 
     public Message(String type, String sender, byte[] payload) {

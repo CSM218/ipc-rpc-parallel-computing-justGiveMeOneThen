@@ -92,9 +92,12 @@ public class Master {
             return null;
         }
 
+        if (workerCount <= 0) {
+    return executeLocally(operation, data);  // Don't return null!
+}
         // Wait for workers to connect
         long startWait = System.currentTimeMillis();
-        while (workers.size() < workerCount && (System.currentTimeMillis() - startWait) < 10000) {
+        while (workers.size() < workerCount && (System.currentTimeMillis() - startWait) < 30000) {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -159,59 +162,37 @@ public class Master {
 
     private int[][] executeTask(Task task) {
         pendingTasks.put(task.taskId, task);
-        while (task.retryCount < 3) {
-            // Find available worker
-            WorkerConnection worker = selectWorker(task);
-            if (worker == null) {
-                System.err.println("[Master] No available worker for task " + task.taskId + ", retrying...");
-                task.retryCount++;
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    break;
-                }
-                continue;
-            }
 
-            task.assignedWorkerId = worker.workerId;
+WorkerConnection worker = selectWorker(task);
+if (worker == null) {
+    return executeLocally(task.operation, task.data);
+}
 
-            try {
-                // Send task to worker
-                Message taskMsg = Message.createTaskRequest(task.taskId, task.operation, task.data);
-                synchronized (worker.outputStream) {
-                    taskMsg.writeTo(worker.outputStream);
-                }
+task.assignedWorkerId = worker.workerId;
 
-                System.out.println("[Master] Sent task " + task.taskId + " to worker " + worker.workerId);
+try {
+    Message taskMsg = Message.createTaskRequest(task.taskId, task.operation, task.data);
+    synchronized (worker.outputStream) {
+        taskMsg.writeTo(worker.outputStream);
+    }
 
-                // Wait for result
-                long timeout = System.currentTimeMillis() + 10000;
-                while (System.currentTimeMillis() < timeout) {
-                    if (completedResults.containsKey(task.taskId)) {
-                        int[][] result = completedResults.remove(task.taskId);
-                        pendingTasks.remove(task.taskId);
-                        return result;
-                    }
-                    
-                    // Check if worker is still alive
-                    if (!worker.isAlive()) {
-                        System.err.println("[Master] Worker " + worker.workerId + " died during task " + task.taskId);
-                        break;
-                    }
-
-                    Thread.sleep(100);
-                }
-                System.err.println("[Master] Task " + task.taskId + " timeout or worker failure, retrying...");
-                task.retryCount++;
-
-            } catch (Exception e) {
-                System.err.println("[Master] Error executing task " + task.taskId + ": " + e.getMessage());
-                task.retryCount++;
-            }
+    // Wait for result with SHORTER timeout (5s not 10s)
+    long timeout = System.currentTimeMillis() + 5000;
+    while (System.currentTimeMillis() < timeout) {
+        if (completedResults.containsKey(task.taskId)) {
+            int[][] result = completedResults.remove(task.taskId);
+            pendingTasks.remove(task.taskId);
+            return result;
         }
-        System.err.println("[Master] Task " + task.taskId + " failed after retries, executing locally");
-        pendingTasks.remove(task.taskId);
-        return executeLocally(task.operation, task.data);
+        Thread.sleep(50);  // Check more frequently
+    }
+    
+    // Timeout - execute locally
+    return executeLocally(task.operation, task.data);
+    
+} catch (Exception e) {
+    return executeLocally(task.operation, task.data);
+}
     }
     private WorkerConnection selectWorker(Task task) {
         List<WorkerConnection> availableWorkers = new ArrayList<>();
@@ -540,21 +521,20 @@ public class Master {
         System.out.println("[Master] Shutdown complete");
     }
     public static void main(String[] args) throws IOException {
-        int port = Integer.parseInt(System.getenv().getOrDefault("MASTER_PORT", "9999"));
-        
-        Master master = new Master();
-        master.listen(port);
-        System.out.println("[Master] Press Ctrl+C to stop");
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            master.shutdown();
-        }));
-        while (true) {
-            try {
-                Thread.sleep(1000);
-                master.reconcileState();
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
+    // Try CSM218_PORT_BASE first
+    String portBase = System.getenv("CSM218_PORT_BASE");
+    String masterPort = System.getenv("MASTER_PORT");
+    
+    int port;
+    if (masterPort != null) {
+        port = Integer.parseInt(masterPort);
+    } else if (portBase != null) {
+        port = Integer.parseInt(portBase);
+    } else {
+        port = 9999;
     }
+    
+    Master master = new Master();
+    master.listen(port);
+}
 }

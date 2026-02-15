@@ -38,7 +38,7 @@ public class Worker {
         try {
             // Connect to master
             socket = new Socket(masterHost, port);
-            socket.setSoTimeout(5000); // 5 second timeout
+            socket.setSoTimeout(30000); // 30 second timeout
             inputStream = socket.getInputStream();
             outputStream = socket.getOutputStream();
             System.out.println("[Worker " + workerId + "] Connected to master at " + masterHost + ":" + port);
@@ -129,6 +129,7 @@ public class Worker {
             responseMsg.sender = workerId;
             synchronized (outputStream) {
                 responseMsg.writeTo(outputStream);
+                outputStream.flush();
             }
             System.out.println("[Worker " + workerId + "] Completed task " + taskReq.taskId);
         } catch (Exception e) {

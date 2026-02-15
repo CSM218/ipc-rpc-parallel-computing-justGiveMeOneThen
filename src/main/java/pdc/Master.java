@@ -464,6 +464,7 @@ public class Master {
                 try {
                     synchronized (worker.outputStream) {
                         heartbeat.writeTo(worker.outputStream);
+                        worker.outputStream.flush();
                     }
                 } catch (IOException e) {
                     System.err.println("[Master] Failed to send heartbeat to worker " + worker.workerId);
